@@ -1,0 +1,49 @@
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+coverage/
+htmlcov/
+.coverage
+*.cover
+
+# Misc
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite3
+
+# Alembic
+alembic/versions/*.pyc
