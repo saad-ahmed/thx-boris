@@ -139,6 +139,7 @@ Pre-allow safe commands to reduce friction. Access via `/permissions` command.
 ### Safe to Pre-Allow
 
 ```
+# Build & test commands
 Bash(bun run build:*)
 Bash(bun run lint:*)
 Bash(bun run test:*)
@@ -146,11 +147,29 @@ Bash(bun run typecheck:*)
 Bash(npm run build:*)
 Bash(npm run lint:*)
 Bash(npm run test:*)
+Bash(yarn build:*)
+Bash(yarn lint:*)
+Bash(yarn test:*)
+Bash(pnpm build:*)
+Bash(pnpm lint:*)
+Bash(pnpm test:*)
+
+# Git read operations
+Bash(git status)
+Bash(git diff*)
+Bash(git log*)
+Bash(git branch*)
+Bash(git show*)
+
+# File exploration
 Bash(find:*)
 Bash(grep:*)
 Bash(cat:*)
 Bash(head:*)
 Bash(tail:*)
+Bash(ls:*)
+Bash(tree:*)
+Bash(wc:*)
 ```
 
 ### Never Pre-Allow
@@ -158,8 +177,29 @@ Bash(tail:*)
 ```
 Bash(rm -rf *)
 Bash(git push -f *)
+Bash(git reset --hard *)
 Bash(sudo *)
 Bash(curl * | bash)
+Bash(chmod 777 *)
+Bash(> /dev/*)
+```
+
+### Personal Overrides with settings.local.json
+
+For personal permissions that shouldn't be committed:
+
+```bash
+# Create personal settings (gitignored)
+touch .claude/settings.local.json
+```
+
+```json
+// .claude/settings.local.json
+{
+  "permissions": {
+    "allow": ["Bash(my-custom-script)"]
+  }
+}
 ```
 
 ---
@@ -172,7 +212,7 @@ Running multiple Claudes maximizes throughput for complex projects.
 
 ```
 Tab 1: Feature A implementation
-Tab 2: Tests for Feature A  
+Tab 2: Tests for Feature A
 Tab 3: Feature B implementation
 Tab 4: Bug fixes
 Tab 5: Documentation
@@ -183,6 +223,26 @@ Tab 5: Documentation
 2. Enable system notifications for when Claude needs input
 3. Use descriptive window titles
 
+### Git Worktrees (Recommended for True Parallelism)
+
+Multiple terminals in the same directory can cause conflicts. Use git worktrees instead:
+
+```bash
+# Create worktrees for parallel work
+git worktree add ../myproject-feature-a feature-a
+git worktree add ../myproject-feature-b feature-b
+git worktree add ../myproject-tests main
+
+# Each worktree gets its own Claude instance
+cd ../myproject-feature-a && claude
+cd ../myproject-feature-b && claude
+```
+
+**Benefits:**
+- No file conflicts between Claude instances
+- Each branch is completely isolated
+- Easy cleanup: `git worktree remove ../myproject-feature-a`
+
 ### Web + Terminal Hybrid
 
 ```
@@ -191,7 +251,7 @@ Web Claudes: Research, docs, parallel exploration
 
 Handoff patterns:
 - Terminal → Web: Use & to background session
-- Web → Terminal: Use --teleport to resume locally
+- Web → Terminal: Use --resume to continue locally
 ```
 
 ### Task Decomposition for Parallelization
@@ -269,9 +329,84 @@ Connect Claude to external services via MCP servers.
 ```
 
 ### Available First-Party MCPs
-- Slack
-- Google Drive
-- GitHub
+
+| MCP Server | Use Case |
+|------------|----------|
+| Slack | Send messages, read channels |
+| Google Drive | Read/write docs, sheets |
+| GitHub | Issues, PRs, code search |
+| Sentry | Error tracking, issue lookup |
+| PostgreSQL | Direct database queries |
+| Puppeteer | Browser automation, screenshots |
+| Filesystem | Extended file operations |
+
+### Example: Multiple MCPs
+
+```json
+// .mcp.json
+{
+  "mcpServers": {
+    "slack": {
+      "type": "http",
+      "url": "https://slack.mcp.anthropic.com/mcp"
+    },
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/sse"
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    }
+  }
+}
+```
+
+---
+
+## Session Management
+
+### Continue Previous Sessions
+
+```bash
+# Resume last session
+claude --continue
+
+# Resume specific session by ID
+claude --resume <session-id>
+
+# List recent sessions
+claude sessions list
+```
+
+### Headless / CI Mode
+
+Run Claude non-interactively for automation:
+
+```bash
+# Single task, output to stdout
+claude -p "fix all TypeScript errors" --output-format json
+
+# With file output
+claude -p "generate API documentation" > docs/api.md
+
+# In CI pipeline
+claude -p "review this PR for security issues" --output-format json | jq '.result'
+```
+
+### Memory Commands
+
+```bash
+# Save context for future sessions
+/memory add "This project uses pnpm, not npm"
+/memory add "API responses follow JSON:API spec"
+
+# View saved memories
+/memory list
+
+# Clear memories
+/memory clear
+```
 
 ---
 
@@ -292,4 +427,7 @@ Connect Claude to external services via MCP servers.
 
 - `references/subagent-templates.md` - Complete subagent templates
 - `references/hooks-patterns.md` - Hook configuration examples
+- `references/troubleshooting.md` - Common issues and fixes
+- `references/anti-patterns.md` - What NOT to do
 - `assets/agents/` - Ready-to-use agent files
+- `CLAUDE.md.template` - Copy-paste starter for new projects

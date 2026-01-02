@@ -14,16 +14,43 @@ Hooks are commands that run automatically at specific points in Claude's workflo
 |------|------|----------|
 | `PreToolUse` | Before Claude runs a tool | Validation, preparation |
 | `PostToolUse` | After Claude runs a tool | Formatting, verification |
+| `Notification` | When Claude needs attention | Desktop alerts |
+| `Stop` | When Claude session ends | Cleanup, reporting |
+
+### Environment Variables
+
+These variables are available in hook commands:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `$TOOL_NAME` | Name of the tool being used | `Write`, `Bash` |
+| `$TOOL_INPUT` | JSON input to the tool | `{"file_path": "..."}` |
+| `$FILE_PATH` | Path of file being modified | `/src/app.ts` |
+| `$EXIT_CODE` | Exit code (PostToolUse only) | `0`, `1` |
+| `$CLAUDE_SESSION_ID` | Current session identifier | `abc123` |
+| `$CLAUDE_WORKING_DIR` | Working directory | `/home/user/project` |
 
 ### Matcher Syntax
 
 ```
 Write           - Matches Write tool
-Edit            - Matches Edit tool  
+Edit            - Matches Edit tool
 Write|Edit      - Matches Write OR Edit
 Bash(git *)     - Matches Bash with git commands
 Bash(npm run *) - Matches Bash with npm run commands
 *               - Matches everything (use carefully)
+```
+
+### Testing Hooks
+
+Before deploying hooks, test them:
+
+```bash
+# Test hook command manually
+echo "Testing hook..." && bun run format
+
+# Run Claude with hook debugging
+CLAUDE_DEBUG_HOOKS=1 claude
 ```
 
 ---
@@ -365,6 +392,251 @@ Add logging to verify hooks run:
     "hooks": [{
       "type": "command",
       "command": "bun run format && git add -u || true"
+    }]
+  }]
+}
+```
+
+---
+
+## Notification Hooks
+
+Alert when Claude needs input or completes tasks.
+
+### Desktop Notification on Completion
+
+**macOS:**
+```json
+{
+  "Notification": [{
+    "matcher": "*",
+    "hooks": [{
+      "type": "command",
+      "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Claude Code\"'"
+    }]
+  }]
+}
+```
+
+**Linux (notify-send):**
+```json
+{
+  "Notification": [{
+    "matcher": "*",
+    "hooks": [{
+      "type": "command",
+      "command": "notify-send 'Claude Code' 'Claude needs your attention'"
+    }]
+  }]
+}
+```
+
+### Sound Alert
+
+```json
+{
+  "Notification": [{
+    "matcher": "*",
+    "hooks": [{
+      "type": "command",
+      "command": "afplay /System/Library/Sounds/Ping.aiff || paplay /usr/share/sounds/freedesktop/stereo/complete.oga || true"
+    }]
+  }]
+}
+```
+
+---
+
+## Stop Hooks
+
+Run cleanup or reporting when Claude session ends.
+
+### Session Summary
+
+```json
+{
+  "Stop": [{
+    "hooks": [{
+      "type": "command",
+      "command": "echo \"Session $CLAUDE_SESSION_ID ended at $(date)\" >> ~/.claude/session.log"
+    }]
+  }]
+}
+```
+
+### Git Status Check
+
+```json
+{
+  "Stop": [{
+    "hooks": [{
+      "type": "command",
+      "command": "git status --short && echo '---' && git diff --stat"
+    }]
+  }]
+}
+```
+
+### Cleanup Temp Files
+
+```json
+{
+  "Stop": [{
+    "hooks": [{
+      "type": "command",
+      "command": "rm -f /tmp/claude-* || true"
+    }]
+  }]
+}
+```
+
+---
+
+## Hook Chaining
+
+Run multiple hooks in sequence for the same trigger.
+
+### Format, Lint, Then Stage
+
+```json
+{
+  "PostToolUse": [{
+    "matcher": "Write|Edit",
+    "hooks": [
+      {
+        "type": "command",
+        "command": "prettier --write \"$FILE_PATH\" || true"
+      },
+      {
+        "type": "command",
+        "command": "eslint --fix \"$FILE_PATH\" || true"
+      },
+      {
+        "type": "command",
+        "command": "git add \"$FILE_PATH\" || true"
+      }
+    ]
+  }]
+}
+```
+
+### Validate, Test, Then Notify
+
+```json
+{
+  "PreToolUse": [{
+    "matcher": "Bash(git push*)",
+    "hooks": [
+      {
+        "type": "command",
+        "command": "bun run typecheck"
+      },
+      {
+        "type": "command",
+        "command": "bun run test"
+      },
+      {
+        "type": "command",
+        "command": "echo 'All checks passed, pushing...'"
+      }
+    ]
+  }]
+}
+```
+
+---
+
+## Conditional Hook Execution
+
+### Only Run for Specific File Types
+
+```json
+{
+  "PostToolUse": [{
+    "matcher": "Write|Edit",
+    "hooks": [{
+      "type": "command",
+      "command": "if [[ \"$FILE_PATH\" =~ \\.(ts|tsx)$ ]]; then prettier --write \"$FILE_PATH\"; fi || true"
+    }]
+  }]
+}
+```
+
+### Skip for Generated Files
+
+```json
+{
+  "PostToolUse": [{
+    "matcher": "Write|Edit",
+    "hooks": [{
+      "type": "command",
+      "command": "if ! grep -q '@generated' \"$FILE_PATH\" 2>/dev/null; then bun run format -- \"$FILE_PATH\"; fi || true"
+    }]
+  }]
+}
+```
+
+### Different Formatters by Extension
+
+```json
+{
+  "PostToolUse": [{
+    "matcher": "Write|Edit",
+    "hooks": [{
+      "type": "command",
+      "command": "case \"$FILE_PATH\" in *.py) black \"$FILE_PATH\";; *.ts|*.tsx) prettier --write \"$FILE_PATH\";; *.go) gofmt -w \"$FILE_PATH\";; esac || true"
+    }]
+  }]
+}
+```
+
+---
+
+## Blocking vs Non-Blocking Hooks
+
+### Blocking Hook (PreToolUse)
+
+Stops Claude if check fails:
+
+```json
+{
+  "PreToolUse": [{
+    "matcher": "Bash(git commit*)",
+    "hooks": [{
+      "type": "command",
+      "command": "bun run test"
+    }]
+  }]
+}
+```
+
+### Non-Blocking Hook (PostToolUse)
+
+Runs but doesn't stop Claude on failure:
+
+```json
+{
+  "PostToolUse": [{
+    "matcher": "Write|Edit",
+    "hooks": [{
+      "type": "command",
+      "command": "bun run format || true"
+    }]
+  }]
+}
+```
+
+### Force Non-Blocking PreToolUse
+
+When you want to warn but not block:
+
+```json
+{
+  "PreToolUse": [{
+    "matcher": "Bash(rm *)",
+    "hooks": [{
+      "type": "command",
+      "command": "(echo '⚠️  Deleting files...' && ls -la $TOOL_INPUT) || true"
     }]
   }]
 }

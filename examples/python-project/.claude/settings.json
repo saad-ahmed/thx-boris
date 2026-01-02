@@ -1,0 +1,39 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "black . && isort . || true"
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash(git commit*)",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "ruff check . && mypy . && pytest"
+        }
+      ]
+    }
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(ruff *)",
+      "Bash(black *)",
+      "Bash(isort *)",
+      "Bash(mypy *)",
+      "Bash(alembic *)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ]
+  }
+}
