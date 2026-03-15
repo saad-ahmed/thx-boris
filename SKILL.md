@@ -1,11 +1,43 @@
 ---
 name: thx-boris
-description: Meta-workflow for using Claude Code effectively, based on patterns from Boris Cherny (Claude Code creator). Use when setting up a new project with Claude Code, optimizing an existing workflow, creating CLAUDE.md files, designing subagents, configuring hooks, or running parallel Claude sessions. Triggers on "how should I structure my CLAUDE.md", "create a subagent for X", "set up hooks", "optimize my Claude Code setup".
+description: Production-tested patterns for maximizing Claude Code effectiveness. Use when setting up a new project with Claude Code, creating CLAUDE.md files, designing subagents, configuring hooks, optimizing permissions, or running parallel Claude sessions. Triggers on "how should I structure my CLAUDE.md", "create a subagent for X", "set up hooks", "optimize my Claude Code setup", "configure Claude Code for my project". Do NOT use for general coding questions, debugging specific bugs, or writing application code.
+license: MIT
+compatibility: Designed for Claude Code CLI and Claude.ai. Requires shell access for scripts/ executables.
+metadata:
+  author: saad-ahmed
+  version: 2.0.0
+  category: developer-tools
+  tags: [claude-code, workflow, automation, devtools]
 ---
 
 # thx-boris: Claude Code Mastery
 
 Production-tested patterns for maximizing Claude Code effectiveness, based on workflows from the Claude Code team.
+
+## Instructions
+
+### Step 1: Identify the User's Goal
+
+Determine which workflow the user needs:
+
+| Goal | Section | Reference |
+|------|---------|-----------|
+| Set up a new project | The Living CLAUDE.md Pattern | `assets/claude-md-template.md` |
+| Create an agent | Subagent Design | `references/subagent-templates.md` |
+| Configure hooks | Hook Automation | `references/hooks-patterns.md` |
+| Optimize permissions | Permission Optimization | — |
+| Run parallel sessions | Parallel Orchestration | — |
+| Set up MCP servers | MCP Integration | — |
+| Troubleshoot issues | — | `references/troubleshooting.md` |
+| Avoid common mistakes | — | `references/anti-patterns.md` |
+
+### Step 2: Apply the Relevant Pattern
+
+Follow the pattern for the user's goal. Each pattern includes step-by-step instructions, success criteria, and common pitfalls.
+
+### Step 3: Validate the Setup
+
+Run `scripts/validate-skill.sh` to verify configuration, or run `scripts/setup-project.sh` to bootstrap a new project.
 
 ---
 
@@ -39,15 +71,6 @@ Production-tested patterns for maximizing Claude Code effectiveness, based on wo
 Claude makes mistake → Human notices → Add to CLAUDE.md → Claude never repeats
 ```
 
-**Real example from Claude Code repo:**
-```markdown
-# Before (Claude used enum)
-- Prefer `type` over `interface`; avoid `enum` (use string unions)
-
-# After (strengthened after violation)
-- Prefer `type` over `interface`; **never use `enum`** (use string literal unions instead)
-```
-
 ### Team CLAUDE.md Protocol
 
 For team projects, CLAUDE.md is a shared artifact:
@@ -55,6 +78,8 @@ For team projects, CLAUDE.md is a shared artifact:
 2. All team members contribute
 3. Review CLAUDE.md changes in PRs
 4. Treat as living documentation
+
+A ready-to-use template is available at `assets/claude-md-template.md`.
 
 ---
 
@@ -66,19 +91,22 @@ Subagents are specialized Claude instances with focused responsibilities. Store 
 
 | Task Type | Subagent? | Rationale |
 |-----------|-----------|-----------|
-| Repetitive validation | ✅ Yes | Consistent checks |
-| Code review patterns | ✅ Yes | Domain expertise |
-| Complex multi-step | ✅ Yes | Focused context |
-| One-off tasks | ❌ No | Overhead not worth it |
+| Repetitive validation | Yes | Consistent checks |
+| Code review patterns | Yes | Domain expertise |
+| Complex multi-step | Yes | Focused context |
+| One-off tasks | No | Overhead not worth it |
 
-### Subagent Templates
+### Available Agent Templates
 
-See `references/subagent-templates.md` for complete templates:
+Ready-to-use agents in `assets/agents/`:
 - **build-validator** - Verify builds pass before commit
-- **code-architect** - High-level design decisions
 - **code-simplifier** - Reduce complexity
-- **oncall-guide** - Production incident response
 - **verify-app** - End-to-end application testing
+- **dependency-updater** - Safe dependency updates
+- **migration-runner** - Database migration with rollback
+- **security-scanner** - OWASP-based security checks
+
+See `references/subagent-templates.md` for additional templates (code-architect, oncall-guide, pr-reviewer, test-writer).
 
 ### Creating a Subagent
 
@@ -128,7 +156,9 @@ Hooks run automatically before/after Claude actions. Configure in `.claude/setti
 }
 ```
 
-See `references/hooks-patterns.md` for complete hook configurations.
+CRITICAL: PostToolUse hooks should always end with `|| true` to avoid blocking Claude. PreToolUse hooks should NOT use `|| true` so they block on failure.
+
+See `references/hooks-patterns.md` for complete hook configurations including Notification, Stop, and chaining patterns.
 
 ---
 
@@ -181,26 +211,11 @@ Bash(git reset --hard *)
 Bash(sudo *)
 Bash(curl * | bash)
 Bash(chmod 777 *)
-Bash(> /dev/*)
 ```
 
-### Personal Overrides with settings.local.json
+### Personal Overrides
 
-For personal permissions that shouldn't be committed:
-
-```bash
-# Create personal settings (gitignored)
-touch .claude/settings.local.json
-```
-
-```json
-// .claude/settings.local.json
-{
-  "permissions": {
-    "allow": ["Bash(my-custom-script)"]
-  }
-}
-```
+For personal permissions that shouldn't be committed, use `.claude/settings.local.json`.
 
 ---
 
@@ -208,70 +223,34 @@ touch .claude/settings.local.json
 
 Running multiple Claudes maximizes throughput for complex projects.
 
-### Terminal Strategy (Boris Pattern)
-
-```
-Tab 1: Feature A implementation
-Tab 2: Tests for Feature A
-Tab 3: Feature B implementation
-Tab 4: Bug fixes
-Tab 5: Documentation
-```
-
-**Key setup:**
-1. Number tabs 1-5 for quick switching
-2. Enable system notifications for when Claude needs input
-3. Use descriptive window titles
-
-### Git Worktrees (Recommended for True Parallelism)
-
-Multiple terminals in the same directory can cause conflicts. Use git worktrees instead:
+### Git Worktrees (Recommended)
 
 ```bash
 # Create worktrees for parallel work
 git worktree add ../myproject-feature-a feature-a
 git worktree add ../myproject-feature-b feature-b
-git worktree add ../myproject-tests main
 
 # Each worktree gets its own Claude instance
 cd ../myproject-feature-a && claude
 cd ../myproject-feature-b && claude
 ```
 
-**Benefits:**
-- No file conflicts between Claude instances
-- Each branch is completely isolated
-- Easy cleanup: `git worktree remove ../myproject-feature-a`
-
-### Web + Terminal Hybrid
+### Task Decomposition
 
 ```
-Terminal Claudes: Deep implementation work (numbered tabs)
-Web Claudes: Research, docs, parallel exploration
-
-Handoff patterns:
-- Terminal → Web: Use & to background session
-- Web → Terminal: Use --resume to continue locally
-```
-
-### Task Decomposition for Parallelization
-
-```
-❌ Bad: "Implement the entire authentication system"
-✅ Good: Split into parallel tracks:
-   - Claude 1: Auth API endpoints
-   - Claude 2: Auth UI components
-   - Claude 3: Auth tests
-   - Claude 4: Auth documentation
+Bad: "Implement the entire authentication system"
+Good: Split into parallel tracks:
+  - Claude 1: Auth API endpoints
+  - Claude 2: Auth UI components
+  - Claude 3: Auth tests
+  - Claude 4: Auth documentation
 ```
 
 ---
 
 ## Custom Slash Commands
 
-Create project-specific commands for common workflows.
-
-### Example: /commit-push-pr
+Create project-specific commands in `.claude/commands/`.
 
 ```markdown
 # .claude/commands/commit-push-pr.md
@@ -284,51 +263,13 @@ Steps:
 4. Create PR with description from commits
 ```
 
-### Command Design Principles
-
-1. **Atomic** - One clear outcome
-2. **Idempotent** - Safe to run multiple times
-3. **Verbose** - Log what's happening
-4. **Recoverable** - Handle failures gracefully
-
----
-
-## Model Selection
-
-**Default: Opus 4.5 with thinking**
-
-Why Opus over Sonnet for complex work:
-- Less steering required
-- Better tool use
-- Fewer mistakes = faster overall
-- Thinking mode catches edge cases
-
-When Sonnet is acceptable:
-- Simple, well-defined tasks
-- High-volume, low-complexity work
-- When latency matters more than quality
+Design principles: Atomic, Idempotent, Verbose, Recoverable.
 
 ---
 
 ## MCP Integration
 
-Connect Claude to external services via MCP servers.
-
-### Example: Slack Integration
-
-```json
-// .mcp.json
-{
-  "mcpServers": {
-    "slack": {
-      "type": "http",
-      "url": "https://slack.mcp.anthropic.com/mcp"
-    }
-  }
-}
-```
-
-### Available First-Party MCPs
+Connect Claude to external services via MCP servers. Configure in `.mcp.json`.
 
 | MCP Server | Use Case |
 |------------|----------|
@@ -338,75 +279,85 @@ Connect Claude to external services via MCP servers.
 | Sentry | Error tracking, issue lookup |
 | PostgreSQL | Direct database queries |
 | Puppeteer | Browser automation, screenshots |
-| Filesystem | Extended file operations |
-
-### Example: Multiple MCPs
-
-```json
-// .mcp.json
-{
-  "mcpServers": {
-    "slack": {
-      "type": "http",
-      "url": "https://slack.mcp.anthropic.com/mcp"
-    },
-    "sentry": {
-      "type": "http",
-      "url": "https://mcp.sentry.dev/sse"
-    },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
-    }
-  }
-}
-```
 
 ---
 
 ## Session Management
 
-### Continue Previous Sessions
-
 ```bash
 # Resume last session
 claude --continue
 
-# Resume specific session by ID
-claude --resume <session-id>
+# Resume specific session
+claude --resume SESSION_ID
 
-# List recent sessions
-claude sessions list
-```
-
-### Headless / CI Mode
-
-Run Claude non-interactively for automation:
-
-```bash
-# Single task, output to stdout
+# Headless / CI mode
 claude -p "fix all TypeScript errors" --output-format json
-
-# With file output
-claude -p "generate API documentation" > docs/api.md
-
-# In CI pipeline
-claude -p "review this PR for security issues" --output-format json | jq '.result'
 ```
 
-### Memory Commands
+---
 
-```bash
-# Save context for future sessions
-/memory add "This project uses pnpm, not npm"
-/memory add "API responses follow JSON:API spec"
+## Examples
 
-# View saved memories
-/memory list
+### Example 1: Setting up a new TypeScript project
 
-# Clear memories
-/memory clear
-```
+User says: "Set up Claude Code for my Next.js project"
+
+Actions:
+1. Run `scripts/setup-project.sh . pnpm`
+2. Copy `assets/claude-md-template.md` to `CLAUDE.md`
+3. Customize CLAUDE.md with project-specific commands and style
+4. Copy relevant agents from `assets/agents/` to `.claude/agents/`
+
+Result: Complete Claude Code configuration with hooks, permissions, and agents.
+
+See `assets/example-configs/typescript-project/` for a working example.
+
+### Example 2: Creating a custom subagent
+
+User says: "Create a subagent for code review"
+
+Actions:
+1. Consult `references/subagent-templates.md` for the pr-reviewer template
+2. Copy to `.claude/agents/pr-reviewer.md`
+3. Customize trigger conditions and review checklist
+
+Result: Agent file ready to use in `.claude/agents/`.
+
+### Example 3: Configuring hooks for a Python project
+
+User says: "Set up auto-formatting hooks for my Python project"
+
+Actions:
+1. Consult `references/hooks-patterns.md` for the Python project pattern
+2. Create `.claude/settings.json` with Black + isort PostToolUse hooks
+3. Add pytest + mypy PreToolUse hooks for pre-commit
+
+Result: Auto-formatting on every file change, validation before every commit.
+
+See `assets/example-configs/python-project/` for a working example.
+
+---
+
+## Troubleshooting
+
+### Hooks not running
+Cause: Invalid JSON in `.claude/settings.json` or wrong matcher pattern
+Solution: Validate JSON with `cat .claude/settings.json | jq .` and check matcher syntax in `references/hooks-patterns.md`
+
+### Claude ignores CLAUDE.md instructions
+Cause: File not at project root, wrong filename, or instructions too verbose
+Solution: Verify file is exactly `CLAUDE.md` at root. Keep instructions concise with bullet points. Move details to references.
+
+### Skill doesn't trigger
+Cause: Description too vague or missing trigger phrases
+Solution: Run `scripts/validate-skill.sh` to check. Add specific trigger phrases to the description field.
+
+### Over-triggering
+Cause: Description too broad
+Solution: Add negative triggers ("Do NOT use for...") and be more specific about scope.
+
+See `references/troubleshooting.md` for comprehensive troubleshooting.
 
 ---
 
@@ -418,8 +369,9 @@ claude -p "review this PR for security issues" --output-format json | jq '.resul
 | Repetitive workflow | Create subagent |
 | Auto-format code | PostToolUse hook |
 | Reduce permission prompts | /permissions allow |
-| Complex feature | Parallel Claudes |
+| Complex feature | Parallel Claudes with git worktrees |
 | Common multi-step | Custom slash command |
+| New project setup | Run `scripts/setup-project.sh` |
 
 ---
 
@@ -430,4 +382,7 @@ claude -p "review this PR for security issues" --output-format json | jq '.resul
 - `references/troubleshooting.md` - Common issues and fixes
 - `references/anti-patterns.md` - What NOT to do
 - `assets/agents/` - Ready-to-use agent files
-- `CLAUDE.md.template` - Copy-paste starter for new projects
+- `assets/claude-md-template.md` - Copy-paste starter for new projects
+- `assets/example-configs/` - Complete TypeScript and Python project examples
+- `scripts/setup-project.sh` - Bootstrap Claude Code for a new project
+- `scripts/validate-skill.sh` - Validate skill folder structure
