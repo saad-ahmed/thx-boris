@@ -78,6 +78,12 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
       echo "⚠️  Description may be missing trigger conditions (include 'Use when...')"
       WARNINGS=$((WARNINGS + 1))
     fi
+
+    # Check for second-person language (guidelines recommend third-person)
+    if grep '^description:' "$SKILL_DIR/SKILL.md" | grep -qiE '\byou\b|\byour\b'; then
+      echo "⚠️  Description uses second-person ('you/your') — guidelines recommend third-person"
+      WARNINGS=$((WARNINGS + 1))
+    fi
   else
     echo "❌ Missing required 'description' field"
     ERRORS=$((ERRORS + 1))
@@ -171,6 +177,17 @@ echo "Directory structure:"
 [ -d "$SKILL_DIR/references" ] && echo "  ✅ references/" || echo "  ℹ️  No references/ (optional)"
 [ -d "$SKILL_DIR/assets" ] && echo "  ✅ assets/" || echo "  ℹ️  No assets/ (optional)"
 [ -d "$SKILL_DIR/templates" ] && echo "  ✅ templates/" || echo "  ℹ️  No templates/ (optional)"
+
+# Check for nested references (references that link to other references)
+if [ -d "$SKILL_DIR/references" ]; then
+  for ref in "$SKILL_DIR/references"/*.md; do
+    if [ -f "$ref" ] && grep -q 'references/' "$ref" 2>/dev/null; then
+      BASENAME=$(basename "$ref")
+      echo "  ⚠️  $BASENAME contains references to other reference files (keep one level deep)"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  done
+fi
 
 # Check for dynamic context usage (March 2026)
 echo "---"

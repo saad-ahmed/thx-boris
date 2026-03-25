@@ -105,6 +105,21 @@ Subagents are specialized Claude instances with focused responsibilities. Store 
 | Complex multi-step | Yes | Focused context |
 | One-off tasks | No | Overhead not worth it |
 
+### Running Skills as Subagents
+
+Use `context: fork` in SKILL.md frontmatter to run a skill in an isolated subagent. The skill content becomes the subagent's task prompt (no conversation history).
+
+```yaml
+---
+name: deep-research
+description: Research a topic thoroughly
+context: fork
+agent: Explore
+---
+```
+
+Available agent types: `Explore` (fast codebase search), `Plan` (architecture), `general-purpose` (default).
+
 ### Available Agent Templates
 
 Ready-to-use agents in `assets/agents/`:
@@ -304,16 +319,36 @@ See `references/troubleshooting.md` for comprehensive troubleshooting.
 
 ---
 
+## Model Selection
+
+**Default:** Opus 4.6 (the most capable Claude model).
+
+**Why Opus over Sonnet for complex work:**
+- Less steering required
+- Better tool use
+- Fewer mistakes = faster overall
+
+**When Sonnet 4.6 is acceptable:**
+- Simple, well-defined tasks
+- High-volume, low-complexity work
+- When latency matters more than quality
+
+Override per-skill with `model:` in frontmatter.
+
+---
+
 ## Quick Reference
 
 | Task | Solution |
 |------|----------|
 | Claude repeats mistake | Add to CLAUDE.md |
-| Repetitive workflow | Create subagent |
+| Repetitive workflow | Create subagent in `.claude/agents/` |
 | Auto-format code | PostToolUse hook |
 | Reduce permission prompts | /permissions allow |
 | Complex feature | Parallel Claudes with git worktrees |
-| Common multi-step | Custom slash command |
+| Common multi-step | Create a skill in `.claude/skills/` |
+| Side-effect workflow | Skill with `disable-model-invocation: true` |
+| Isolated research | Skill with `context: fork` + `agent: Explore` |
 | New project setup | Run `scripts/setup-project.sh` |
 
 ---

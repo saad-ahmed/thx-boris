@@ -82,6 +82,28 @@ Configure in `.mcp.json` at project root:
 | Sentry | Error tracking | get_issue, list_errors, resolve |
 | PostgreSQL | Database queries | query, schema, explain |
 | Puppeteer | Browser automation | screenshot, navigate, click |
+| Filesystem | Extended file operations | read, write, list, search |
+
+### Example: Multiple MCPs
+
+```json
+{
+  "mcpServers": {
+    "slack": {
+      "type": "http",
+      "url": "https://slack.mcp.anthropic.com/mcp"
+    },
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/sse"
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    }
+  }
+}
+```
 
 ### MCP Debugging
 
