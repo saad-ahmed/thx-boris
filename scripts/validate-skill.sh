@@ -1,5 +1,5 @@
 #!/bin/bash
-# validate-skill.sh - Validate a skill folder meets Anthropic requirements
+# validate-skill.sh - Validate a skill folder meets Anthropic requirements (March 2026)
 # Usage: bash scripts/validate-skill.sh [skill-directory]
 
 set -euo pipefail
@@ -8,7 +8,7 @@ SKILL_DIR="${1:-.}"
 ERRORS=0
 WARNINGS=0
 
-echo "Validating skill in: $SKILL_DIR"
+echo "Validating skill in: $SKILL_DIR (March 2026 spec)"
 echo "---"
 
 # Check SKILL.md exists (case-sensitive)
@@ -99,6 +99,52 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
     echo "✅ Name does not use reserved words"
   fi
 
+  # Check for argument-hint (recommended)
+  if grep -q '^argument-hint:' "$SKILL_DIR/SKILL.md"; then
+    echo "✅ argument-hint field present"
+  else
+    echo "ℹ️  No argument-hint field (optional, improves autocomplete UX)"
+  fi
+
+  # Check for context field (March 2026)
+  if grep -q '^context:' "$SKILL_DIR/SKILL.md"; then
+    CONTEXT=$(grep '^context:' "$SKILL_DIR/SKILL.md" | head -1 | sed 's/context: *//')
+    if echo "$CONTEXT" | grep -qE '^(fork|agent)$'; then
+      echo "✅ context field valid: $CONTEXT"
+    else
+      echo "⚠️  context field should be 'fork' or 'agent': $CONTEXT"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  else
+    echo "ℹ️  No context field (optional: fork, agent)"
+  fi
+
+  # Check for effort field (March 2026)
+  if grep -q '^effort:' "$SKILL_DIR/SKILL.md"; then
+    EFFORT=$(grep '^effort:' "$SKILL_DIR/SKILL.md" | head -1 | sed 's/effort: *//')
+    if echo "$EFFORT" | grep -qE '^(low|medium|high)$'; then
+      echo "✅ effort field valid: $EFFORT"
+    else
+      echo "⚠️  effort field should be low, medium, or high: $EFFORT"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  else
+    echo "ℹ️  No effort field (optional: low, medium, high)"
+  fi
+
+  # Check for model field
+  if grep -q '^model:' "$SKILL_DIR/SKILL.md"; then
+    MODEL=$(grep '^model:' "$SKILL_DIR/SKILL.md" | head -1 | sed 's/model: *//')
+    if echo "$MODEL" | grep -qE '^(opus|sonnet|haiku)$'; then
+      echo "✅ model field valid: $MODEL"
+    else
+      echo "⚠️  model field should be opus, sonnet, or haiku: $MODEL"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  else
+    echo "ℹ️  No model field (optional: opus, sonnet, haiku)"
+  fi
+
   # Check word count
   WORD_COUNT=$(wc -w < "$SKILL_DIR/SKILL.md")
   if [ "$WORD_COUNT" -gt 5000 ]; then
@@ -107,14 +153,45 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
   else
     echo "✅ SKILL.md is $WORD_COUNT words"
   fi
+
+  # Check line count (March 2026: under 500 lines)
+  LINE_COUNT=$(wc -l < "$SKILL_DIR/SKILL.md")
+  if [ "$LINE_COUNT" -gt 500 ]; then
+    echo "⚠️  SKILL.md is $LINE_COUNT lines (recommend under 500)"
+    WARNINGS=$((WARNINGS + 1))
+  else
+    echo "✅ SKILL.md is $LINE_COUNT lines"
+  fi
 fi
 
 # Check directory structure
 echo "---"
 echo "Directory structure:"
-[ -d "$SKILL_DIR/scripts" ] && echo "  ✅ scripts/" || echo "  ℹ️  No scripts/ (optional)"
+[ -d "$SKILL_DIR/scripts" ] && echo "  ✅ scripts/" || echo "  ℹ️  No scripts/ (optional but recommended)"
 [ -d "$SKILL_DIR/references" ] && echo "  ✅ references/" || echo "  ℹ️  No references/ (optional)"
 [ -d "$SKILL_DIR/assets" ] && echo "  ✅ assets/" || echo "  ℹ️  No assets/ (optional)"
+[ -d "$SKILL_DIR/templates" ] && echo "  ✅ templates/" || echo "  ℹ️  No templates/ (optional)"
+
+# Check for dynamic context usage (March 2026)
+echo "---"
+echo "March 2026 features:"
+if grep -q '!`' "$SKILL_DIR/SKILL.md" 2>/dev/null; then
+  echo "  ✅ Uses dynamic context injection (\!\`command\`)"
+else
+  echo "  ℹ️  No dynamic context injection (\!\`command\`) - optional"
+fi
+
+if grep -q '\$ARGUMENTS' "$SKILL_DIR/SKILL.md"; then
+  echo "  ✅ Uses \$ARGUMENTS variable"
+else
+  echo "  ℹ️  No \$ARGUMENTS usage - optional"
+fi
+
+if grep -q '\$CLAUDE_SKILL_DIR' "$SKILL_DIR/SKILL.md"; then
+  echo "  ✅ Uses \$CLAUDE_SKILL_DIR variable"
+else
+  echo "  ℹ️  No \$CLAUDE_SKILL_DIR usage - optional"
+fi
 
 echo "---"
 echo "Results: $ERRORS error(s), $WARNINGS warning(s)"
