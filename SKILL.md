@@ -72,6 +72,14 @@ Run `scripts/validate-skill.sh` to verify configuration, or run `scripts/setup-p
 Claude makes mistake → Human notices → Add to CLAUDE.md → Claude never repeats
 ```
 
+**Real-world example from Claude Code development:**
+
+```markdown
+## Anti-Patterns
+- Don't use `enum` for union types — use `type Status = 'active' | 'inactive'`
+  (Claude kept generating TypeScript enums until this was added)
+```
+
 ### Team CLAUDE.md Protocol
 
 For team projects, CLAUDE.md is a shared artifact:
@@ -96,6 +104,21 @@ Subagents are specialized Claude instances with focused responsibilities. Store 
 | Code review patterns | Yes | Domain expertise |
 | Complex multi-step | Yes | Focused context |
 | One-off tasks | No | Overhead not worth it |
+
+### Running Skills as Subagents
+
+Use `context: fork` in SKILL.md frontmatter to run a skill in an isolated subagent. The skill content becomes the subagent's task prompt (no conversation history).
+
+```yaml
+---
+name: deep-research
+description: Research a topic thoroughly
+context: fork
+agent: Explore
+---
+```
+
+Available agent types: `Explore` (fast codebase search), `Plan` (architecture), `general-purpose` (default).
 
 ### Available Agent Templates
 
@@ -167,6 +190,18 @@ See `references/hooks-patterns.md` for complete hook configurations including No
 
 Running multiple Claudes maximizes throughput for complex projects.
 
+### The 5-Tab Terminal Strategy (Boris's Pattern)
+
+```
+Tab 1: Claude — main coding session
+Tab 2: Claude — research/exploration (isolated context)
+Tab 3: git / manual commands
+Tab 4: dev server / build watcher
+Tab 5: test runner
+```
+
+This prevents context pollution between coding and research tasks.
+
 ### Git Worktrees (Recommended)
 
 ```bash
@@ -190,7 +225,7 @@ Good: Split into parallel tracks:
   - Claude 4: Auth documentation
 ```
 
-### Custom Slash Commands
+### Custom Slash Commands & Skills
 
 Create project-specific commands in `.claude/commands/`:
 
@@ -200,6 +235,21 @@ Commit all changes with a descriptive message, push to origin, and open a PR.
 ```
 
 Design principles: Atomic, Idempotent, Verbose, Recoverable.
+
+**March 2026 skill features** (for skill authors):
+
+| Feature | Description |
+|---------|-------------|
+| `context: fork` | Run skill in isolated context |
+| `context: agent` | Run as subagent, returns summary |
+| `$ARGUMENTS` | User input after skill name |
+| `$CLAUDE_SKILL_DIR` | Path to skill directory |
+| `!`\`command\` | Dynamic context injection |
+| `allowed-tools` | Restrict which tools skill can use |
+| `disable-model-invocation` | Prevent auto-triggering |
+| `effort: low\|medium\|high` | Hint at expected complexity |
+
+See [references/skill-authoring.md](references/skill-authoring.md) for full documentation.
 
 For permissions, sessions, and MCP configuration, see [references/session-and-mcp.md](references/session-and-mcp.md).
 
@@ -269,16 +319,36 @@ See `references/troubleshooting.md` for comprehensive troubleshooting.
 
 ---
 
+## Model Selection
+
+**Default:** Opus 4.6 (the most capable Claude model).
+
+**Why Opus over Sonnet for complex work:**
+- Less steering required
+- Better tool use
+- Fewer mistakes = faster overall
+
+**When Sonnet 4.6 is acceptable:**
+- Simple, well-defined tasks
+- High-volume, low-complexity work
+- When latency matters more than quality
+
+Override per-skill with `model:` in frontmatter.
+
+---
+
 ## Quick Reference
 
 | Task | Solution |
 |------|----------|
 | Claude repeats mistake | Add to CLAUDE.md |
-| Repetitive workflow | Create subagent |
+| Repetitive workflow | Create subagent in `.claude/agents/` |
 | Auto-format code | PostToolUse hook |
 | Reduce permission prompts | /permissions allow |
 | Complex feature | Parallel Claudes with git worktrees |
-| Common multi-step | Custom slash command |
+| Common multi-step | Create a skill in `.claude/skills/` |
+| Side-effect workflow | Skill with `disable-model-invocation: true` |
+| Isolated research | Skill with `context: fork` + `agent: Explore` |
 | New project setup | Run `scripts/setup-project.sh` |
 
 ---
@@ -296,3 +366,4 @@ See `references/troubleshooting.md` for comprehensive troubleshooting.
 - [templates/](templates/) - Complete TypeScript and Python project examples
 - [scripts/setup-project.sh](scripts/setup-project.sh) - Bootstrap Claude Code for a new project
 - [scripts/validate-skill.sh](scripts/validate-skill.sh) - Validate skill folder structure
+- [scripts/validate-claude-md.sh](scripts/validate-claude-md.sh) - Validate CLAUDE.md structure
