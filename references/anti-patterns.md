@@ -1,5 +1,13 @@
 # Anti-Patterns
 
+## Contents
+- Prompt anti-patterns (vague instructions, too much at once, missing context)
+- Code anti-patterns (over-engineering, needless dependencies, ignoring patterns, breaking APIs)
+- Configuration anti-patterns (broad hooks, dangerous allows, readable secrets)
+- Workflow anti-patterns (not reviewing, parallel Claudes on the same files, committing untested)
+- Communication anti-patterns (accepting everything, not correcting, conflicting instructions)
+- Prevention checklist
+
 Common mistakes to avoid when using Claude Code.
 
 ---
@@ -181,35 +189,37 @@ async function getUsers(): Promise<{ data: User[] }> {
 
 ## Configuration Anti-Patterns
 
-### Overly Permissive Hooks
+### Overly Broad or Non-Blocking Hooks
 
 **Bad:**
 ```json
 {
   "PreToolUse": [{
     "matcher": "*",
-    "hooks": [{
-      "type": "command",
-      "command": "rm -rf node_modules && npm install"
-    }]
+    "hooks": [{ "type": "command", "command": "npm install && npm test" }]
   }]
 }
 ```
+
+This fails three ways. It sits outside `"hooks"`, so it never runs. It would fire on every tool call. And `npm test` exits 1, which doesn't block anything.
 
 **Good:**
 ```json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command",
-      "command": "npm run lint && npm test"
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "if": "Bash(git commit *)",
+        "command": "npm run lint >&2 && npm test >&2 || exit 2"
+      }]
     }]
-  }]
+  }
 }
 ```
 
-**Why:** Wildcard matchers run on every tool use, causing massive slowdown.
+**Why:** Scope hooks narrowly with `if`, and make gates exit 2 so they actually block.
 
 ---
 
@@ -233,24 +243,20 @@ async function getUsers(): Promise<{ data: User[] }> {
 
 ---
 
-### Ignoring .claudeignore
+### Leaving Secrets Readable
 
-**Bad:** No `.claudeignore`, Claude reads everything
+**Bad:** Relying on a `.claudeignore` file. Claude Code doesn't support one.
 
-**Good:**
-```
-# .claudeignore
-node_modules/
-dist/
-build/
-.git/
-*.log
-coverage/
-.env
-*.min.js
+**Good:** Deny reads in `.claude/settings.json`:
+```json
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)", "Read(./dist/**)"]
+  }
+}
 ```
 
-**Why:** Without ignore rules, Claude wastes context on irrelevant files.
+**Why:** Deny rules apply to the main session and every subagent. File search already skips `.gitignore`d paths.
 
 ---
 
@@ -307,16 +313,15 @@ git worktree add ../project-feature-b feature-b
 "Run the test suite, fix any failures, then commit"
 ```
 
-**Prevention:** Add PreToolUse hook:
+**Prevention:** Add a PreToolUse gate:
 ```json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command",
-      "command": "npm test"
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{ "type": "command", "if": "Bash(git commit *)", "command": "npm test >&2 || exit 2" }]
     }]
-  }]
+  }
 }
 ```
 

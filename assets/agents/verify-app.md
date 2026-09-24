@@ -1,3 +1,10 @@
+---
+name: verify-app
+description: Verifies the application end to end (build, runtime, integrations) before deploy. Use before merging to main, before production deploys, and after major refactors or dependency updates.
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
 # Verify App
 
 End-to-end application verification before deployment.

@@ -1,0 +1,62 @@
+[
+  {
+    "skills": ["thx-boris"],
+    "query": "My .claude/settings.json has a PreToolUse hook with matcher \"Bash(git commit*)\" running `npm test`, but commits still go through when tests fail. Fix it.",
+    "files": [],
+    "expected_behavior": [
+      "Explains that matchers only match tool names and moves the argument filter to \"if\": \"Bash(git commit *)\" with matcher \"Bash\"",
+      "Explains that only exit code 2 blocks and changes the command to end with `|| exit 2`, sending output to stderr",
+      "Makes sure the event is nested under a top-level \"hooks\" key"
+    ]
+  },
+  {
+    "skills": ["thx-boris"],
+    "query": "Create a subagent for reviewing pull requests in this repo.",
+    "files": [],
+    "expected_behavior": [
+      "Creates .claude/agents/pr-reviewer.md (or similar) starting with YAML frontmatter",
+      "Frontmatter includes both `name` and `description`, and the description says when to use the agent",
+      "Restricts `tools` to what a reviewer needs (e.g. Read, Grep, Glob, Bash), not Edit/Write"
+    ]
+  },
+  {
+    "skills": ["thx-boris"],
+    "query": "Set up Claude Code for this pnpm Next.js project with auto-formatting and a pre-commit check.",
+    "files": ["templates/typescript-project/CLAUDE.md"],
+    "expected_behavior": [
+      "Runs scripts/setup-project.sh or produces an equivalent .claude/settings.json with hooks under \"hooks\"",
+      "Adds a PostToolUse Write|Edit formatter and a PreToolUse Bash gate using `if` and `exit 2`",
+      "Creates or updates CLAUDE.md from the template and hides secrets with permissions.deny Read rules rather than a .claudeignore"
+    ]
+  },
+  {
+    "skills": ["thx-boris"],
+    "query": "I wrote a skill but Claude never uses it. Here's the frontmatter: `name: Helper`, `description: helps with stuff`.",
+    "files": [],
+    "expected_behavior": [
+      "Flags that name must be lowercase with hyphens and should be specific (e.g. a gerund like `processing-invoices`)",
+      "Rewrites the description in the third person, stating what the skill does and when to use it, with concrete keywords",
+      "Suggests running scripts/validate-skill.sh and checking /skills or /skill-doctor"
+    ]
+  },
+  {
+    "skills": ["thx-boris"],
+    "query": "Upload of my skill zip to claude.ai fails. Frontmatter has name, description, argument-hint, context: fork, and metadata with a tags list.",
+    "files": [],
+    "expected_behavior": [
+      "Explains that only name, description, license, compatibility, metadata, and allowed-tools are portable, and that argument-hint and context are Claude Code-only",
+      "Explains that metadata must map strings to strings and flattens the tags list into a string",
+      "Keeps Claude Code-only fields out of the uploaded version"
+    ]
+  },
+  {
+    "skills": ["thx-boris"],
+    "query": "How should I run three Claude sessions on the same repo without them stepping on each other?",
+    "files": [],
+    "expected_behavior": [
+      "Recommends one git worktree per session (git worktree add ...)",
+      "Splits work by boundary (API / UI / tests), not arbitrarily",
+      "Does not suggest multiple sessions editing the same checkout"
+    ]
+  }
+]

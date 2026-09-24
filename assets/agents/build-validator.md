@@ -1,3 +1,10 @@
+---
+name: build-validator
+description: Verifies typecheck, lint, and tests pass and reports each failure with a suggested fix. Use proactively before committing, before opening a PR, and after rebases or merges.
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
 # Build Validator
 
 Verify all builds and checks pass before any commit.
@@ -7,11 +14,10 @@ Verify all builds and checks pass before any commit.
 - Before creating a PR
 - After rebasing or merging
 
-## Environment Variables
+## Finding Changed Files
 
-These variables are available in hook context:
-- `$CHANGED_FILES` - Space-separated list of modified files
-- `$STAGED_FILES` - Files staged for commit
+- Changed files: `git diff --name-only HEAD`
+- Staged files: `git diff --cached --name-only`
 
 ## Steps
 
@@ -30,15 +36,14 @@ These variables are available in hook context:
 
 3. **Run linter on changed files** (timeout: 30s)
    ```bash
-   $PKG run lint --files $CHANGED_FILES
-   # Or for ESLint directly:
-   npx eslint $CHANGED_FILES
+   CHANGED_FILES=$(git diff --name-only HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx')
+   [ -n "$CHANGED_FILES" ] && npx eslint $CHANGED_FILES
    ```
 
 4. **Run related tests** (timeout: 120s)
    ```bash
    # Find test files for changed source files
-   for file in $CHANGED_FILES; do
+   for file in $(git diff --name-only HEAD -- '*.ts'); do
      test_file="${file%.ts}.test.ts"
      [ -f "$test_file" ] && $PKG run test -- "$test_file"
    done
@@ -100,15 +105,22 @@ Test failures:
 
 ## Integration as Pre-Commit Hook
 
+A command hook can't invoke a named subagent, so the gate runs the same checks directly. Only exit 2 blocks the commit:
+
 ```json
-// .claude/settings.json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command",
-      "command": "claude -p 'Run build-validator agent' --output-format stream"
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "if": "Bash(git commit *)",
+        "command": "npm run typecheck >&2 && npm run lint >&2 && npm test >&2 || exit 2",
+        "timeout": 300
+      }]
     }]
-  }]
+  }
 }
 ```
+
+For a fuller review, ask Claude to "use the build-validator agent" before committing. Its `description` says "Use proactively before committing", so Claude will also delegate to it on its own.

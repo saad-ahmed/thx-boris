@@ -1,643 +1,442 @@
 # Hook Patterns
 
-Configuration examples for Claude Code hooks. Add to `.claude/settings.json`.
+Working hook configurations for `.claude/settings.json`. Every snippet is a complete file, or a fragment that merges under the top-level `"hooks"` key.
+
+## Contents
+- How hooks work (structure, matchers, `if`, input, exit codes)
+- PostToolUse: format and lint
+- PreToolUse: gates and guards
+- Stop, Notification, and SessionStart hooks
+- Complete configs (TypeScript, Python, Go)
+- Hooks in skills and subagents
+- Best practices
+- Debugging
+- Old patterns (don't use)
 
 ---
 
-## Understanding Hooks
+## How hooks work
 
-Hooks are commands that run automatically at specific points in Claude's workflow.
-
-### Hook Types
-
-| Type | When | Use Case |
-|------|------|----------|
-| `PreToolUse` | Before Claude runs a tool | Validation, preparation |
-| `PostToolUse` | After Claude runs a tool | Formatting, verification |
-| `Notification` | When Claude needs attention | Desktop alerts |
-| `Stop` | When Claude session ends | Cleanup, reporting |
-
-### Environment Variables
-
-These variables are available in hook commands:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `$TOOL_NAME` | Name of the tool being used | `Write`, `Bash` |
-| `$TOOL_INPUT` | JSON input to the tool | `{"file_path": "..."}` |
-| `$FILE_PATH` | Path of file being modified | `/src/app.ts` |
-| `$EXIT_CODE` | Exit code (PostToolUse only) | `0`, `1` |
-| `$CLAUDE_SESSION_ID` | Current session identifier | `abc123` |
-| `$CLAUDE_WORKING_DIR` | Working directory | `/home/user/project` |
-
-### Matcher Syntax
-
-```
-Write           - Matches Write tool
-Edit            - Matches Edit tool
-Write|Edit      - Matches Write OR Edit
-Bash(git *)     - Matches Bash with git commands
-Bash(npm run *) - Matches Bash with npm run commands
-*               - Matches everything (use carefully)
-```
-
-### Testing Hooks
-
-Before deploying hooks, test them:
-
-```bash
-# Test hook command manually
-echo "Testing hook..." && bun run format
-
-# Run Claude with hook debugging
-CLAUDE_DEBUG_HOOKS=1 claude
-```
-
----
-
-## PostToolUse Patterns
-
-### Auto-Format on File Changes
-
-Most common pattern. Runs formatter after any file write/edit.
-
-**Bun/npm:**
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run format || true"
-    }]
-  }]
-}
-```
-
-**Prettier directly:**
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "npx prettier --write . || true"
-    }]
-  }]
-}
-```
-
-**Python (black + isort):**
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "black . && isort . || true"
-    }]
-  }]
-}
-```
-
-### Auto-Lint After Changes
+### Structure
 
 ```json
 {
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run lint:file -- \"$CHANGED_FILE\" || true"
-    }]
-  }]
-}
-```
-
-### Run Tests After Implementation Files
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "if [[ ! \"$FILE\" =~ \\.test\\. ]]; then bun run test:file -- \"${FILE%.ts}.test.ts\" || true; fi"
-    }]
-  }]
-}
-```
-
----
-
-## PreToolUse Patterns
-
-### Validate Before Commit
-
-Ensure all checks pass before allowing commit:
-
-```json
-{
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run lint:claude && bun run typecheck && bun run test"
-    }]
-  }]
-}
-```
-
-### Require Test Existence Before Commit
-
-```json
-{
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command", 
-      "command": "git diff --cached --name-only | grep -E '\\.(ts|tsx)$' | grep -v '\\.test\\.' | while read f; do test -f \"${f%.ts}.test.ts\" || (echo \"Missing test for $f\" && exit 1); done"
-    }]
-  }]
-}
-```
-
-### Backup Before Destructive Operations
-
-```json
-{
-  "PreToolUse": [{
-    "matcher": "Bash(rm *)",
-    "hooks": [{
-      "type": "command",
-      "command": "echo 'Creating backup before deletion...' && cp -r . /tmp/backup-$(date +%s) || true"
-    }]
-  }]
-}
-```
-
----
-
-## Combined Configurations
-
-### TypeScript Project (Recommended)
-
-```json
-{
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "bun run format || true"
-        }
-      ]
-    }
-  ],
-  "PreToolUse": [
-    {
-      "matcher": "Bash(git commit*)",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "bun run lint:claude && bun run test"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### Python Project
-
-```json
-{
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "black . && isort . || true"
-        }
-      ]
-    }
-  ],
-  "PreToolUse": [
-    {
-      "matcher": "Bash(git commit*)",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "pytest && mypy . && ruff check ."
-        }
-      ]
-    }
-  ]
-}
-```
-
-### Go Project
-
-```json
-{
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "gofmt -w . && go vet ./... || true"
-        }
-      ]
-    }
-  ],
-  "PreToolUse": [
-    {
-      "matcher": "Bash(git commit*)",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "go test ./... && golangci-lint run"
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## Hook Best Practices
-
-### Always Use `|| true` for PostToolUse
-
-PostToolUse hooks shouldn't block Claude's workflow:
-
-```json
-// ✅ Good - won't block on format failure
-"command": "bun run format || true"
-
-// ❌ Bad - format failure blocks Claude
-"command": "bun run format"
-```
-
-### PreToolUse Should Block on Failure
-
-PreToolUse hooks SHOULD fail if checks don't pass:
-
-```json
-// ✅ Good - blocks commit if tests fail
-"command": "bun run test"
-
-// ❌ Bad - allows commit even if tests fail  
-"command": "bun run test || true"
-```
-
-### Keep Hooks Fast
-
-Hooks run synchronously. Slow hooks = slow Claude.
-
-| Hook Type | Target Duration |
-|-----------|-----------------|
-| PostToolUse | < 2 seconds |
-| PreToolUse | < 10 seconds |
-
-**Optimization tips:**
-- Run formatters on changed files only, not entire project
-- Use `--cache` flags where available
-- Skip hooks for non-code files
-
-### Use Specific Matchers
-
-```json
-// ✅ Good - only triggers on git commits
-"matcher": "Bash(git commit*)"
-
-// ❌ Bad - triggers on ALL bash commands
-"matcher": "Bash(*)"
-```
-
----
-
-## Debugging Hooks
-
-### Test Hook Commands Manually
-
-Before adding a hook, test the command:
-
-```bash
-# Test your hook command
-bun run format || true
-
-# Test with typical file
-echo "test" > test.ts && bun run format || true
-```
-
-### Check Hook Execution
-
-Add logging to verify hooks run:
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "echo '[HOOK] Running format...' && bun run format || true"
-    }]
-  }]
-}
-```
-
----
-
-## Advanced Patterns
-
-### Conditional Hooks by File Type
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "if [[ \"$FILE\" =~ \\.py$ ]]; then black \"$FILE\"; elif [[ \"$FILE\" =~ \\.(ts|tsx)$ ]]; then prettier --write \"$FILE\"; fi || true"
-    }]
-  }]
-}
-```
-
-### Notification on Completion
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Bash(bun run build*)",
-    "hooks": [{
-      "type": "command",
-      "command": "osascript -e 'display notification \"Build complete\" with title \"Claude Code\"' || true"
-    }]
-  }]
-}
-```
-
-### Auto-Stage Formatted Files
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run format && git add -u || true"
-    }]
-  }]
-}
-```
-
----
-
-## Notification Hooks
-
-Alert when Claude needs input or completes tasks.
-
-### Desktop Notification on Completion
-
-**macOS:**
-```json
-{
-  "Notification": [{
-    "matcher": "*",
-    "hooks": [{
-      "type": "command",
-      "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Claude Code\"'"
-    }]
-  }]
-}
-```
-
-**Linux (notify-send):**
-```json
-{
-  "Notification": [{
-    "matcher": "*",
-    "hooks": [{
-      "type": "command",
-      "command": "notify-send 'Claude Code' 'Claude needs your attention'"
-    }]
-  }]
-}
-```
-
-### Sound Alert
-
-```json
-{
-  "Notification": [{
-    "matcher": "*",
-    "hooks": [{
-      "type": "command",
-      "command": "afplay /System/Library/Sounds/Ping.aiff || paplay /usr/share/sounds/freedesktop/stereo/complete.oga || true"
-    }]
-  }]
-}
-```
-
----
-
-## Stop Hooks
-
-Run cleanup or reporting when Claude session ends.
-
-### Session Summary
-
-```json
-{
-  "Stop": [{
-    "hooks": [{
-      "type": "command",
-      "command": "echo \"Session $CLAUDE_SESSION_ID ended at $(date)\" >> ~/.claude/session.log"
-    }]
-  }]
-}
-```
-
-### Git Status Check
-
-```json
-{
-  "Stop": [{
-    "hooks": [{
-      "type": "command",
-      "command": "git status --short && echo '---' && git diff --stat"
-    }]
-  }]
-}
-```
-
-### Cleanup Temp Files
-
-```json
-{
-  "Stop": [{
-    "hooks": [{
-      "type": "command",
-      "command": "rm -f /tmp/claude-* || true"
-    }]
-  }]
-}
-```
-
----
-
-## Hook Chaining
-
-Run multiple hooks in sequence for the same trigger.
-
-### Format, Lint, Then Stage
-
-```json
-{
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [
+  "hooks": {
+    "<Event>": [
       {
-        "type": "command",
-        "command": "prettier --write \"$FILE_PATH\" || true"
-      },
-      {
-        "type": "command",
-        "command": "eslint --fix \"$FILE_PATH\" || true"
-      },
-      {
-        "type": "command",
-        "command": "git add \"$FILE_PATH\" || true"
+        "matcher": "<tool-name pattern>",
+        "hooks": [
+          { "type": "command", "if": "<permission rule>", "command": "<shell>", "timeout": 60 }
+        ]
       }
     ]
-  }]
+  }
 }
 ```
 
-### Validate, Test, Then Notify
+The three levels are: **event** → **matcher group** → **handlers**. The whole thing sits under `"hooks"`. Events placed at the top level of settings.json are silently ignored.
+
+Where hooks can live: `~/.claude/settings.json` (you), `.claude/settings.json` (team, committed), `.claude/settings.local.json` (you, gitignored), managed policy, plugin `hooks/hooks.json`, and skill or subagent frontmatter.
+
+### Events you'll use most
+
+| Event | Fires | Can block? |
+|-------|-------|-----------|
+| `PreToolUse` | Before a tool runs | **Yes** (exit 2 or `permissionDecision: "deny"`) |
+| `PostToolUse` | After a tool succeeds | No (it has already happened); can feed context back to Claude |
+| `UserPromptSubmit` | Before a prompt is processed | Yes |
+| `Stop` / `SubagentStop` | When Claude finishes responding | Can ask Claude to keep going (`decision: "block"`) |
+| `Notification` | Claude needs attention | No |
+| `SessionStart` | startup / resume / clear / compact | No; stdout is added to context |
+| `PreCompact`, `SessionEnd`, `PermissionRequest`, `FileChanged`, … | See `/hooks` | Varies |
+
+### Matcher vs. `if`
+
+- `matcher` matches the **tool name** for tool events: `Bash`, `Write|Edit`, `mcp__github__.*`, `*`.
+- `if` filters by **arguments** using permission-rule syntax. It only applies to tool events.
+
+```json
+{ "matcher": "Bash", "hooks": [{ "type": "command", "if": "Bash(git commit *)", "command": "..." }] }
+{ "matcher": "Edit|Write", "hooks": [{ "type": "command", "if": "Edit(*.ts)", "command": "..." }] }
+```
+
+`"matcher": "Bash(git commit*)"` is **wrong**. Matchers never see arguments.
+
+### Input: JSON on stdin
+
+Hooks don't get `$FILE_PATH`, `$TOOL_INPUT`, or similar env vars. They get JSON on stdin:
 
 ```json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(git push*)",
-    "hooks": [
+  "session_id": "abc123",
+  "hook_event_name": "PostToolUse",
+  "cwd": "/home/user/project",
+  "tool_name": "Edit",
+  "tool_input": { "file_path": "/home/user/project/src/app.ts", "...": "..." }
+}
+```
+
+Extract fields with jq:
+
+```bash
+f=$(jq -r '.tool_input.file_path // empty')
+```
+
+Use `${CLAUDE_PROJECT_DIR}` to reference scripts regardless of cwd.
+
+### Exit codes
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Success. JSON on stdout is parsed for decisions; plain stdout goes to the debug log (except `SessionStart`/`UserPromptSubmit`, where it's added to context) |
+| **`2`** | **Blocking error.** stderr is sent to Claude as the reason; the action is blocked on blockable events |
+| anything else | Non-blocking error. The action proceeds and the first stderr line is shown |
+
+**A test gate that exits 1 does not block.** End gates with `|| exit 2`.
+
+### Handler types
+
+`command` (shell), `http` (POST JSON to a URL), `mcp_tool` (call an MCP tool), `prompt` (ask a fast model yes/no), and `agent` (spawn a verifier subagent; experimental). Useful fields: `timeout` (seconds), `statusMessage`, `async: true` (don't wait), and `once: true` (skill frontmatter only).
+
+---
+
+## PostToolUse: format and lint
+
+### Format only the edited file (fast)
+
+`.claude/hooks/format.sh`:
+
+```bash
+#!/usr/bin/env bash
+# Formats the file Claude just edited. Never fails the tool call.
+f=$(jq -r '.tool_input.file_path // empty')
+[ -z "$f" ] || [ ! -f "$f" ] && exit 0
+grep -q '@generated' "$f" 2>/dev/null && exit 0
+case "$f" in
+  *.ts|*.tsx|*.js|*.jsx|*.json|*.css|*.md) npx prettier --write "$f" ;;
+  *.py) ruff format "$f" && ruff check --fix "$f" ;;
+  *.go) gofmt -w "$f" ;;
+  *.rs) rustfmt "$f" ;;
+esac >/dev/null 2>&1
+exit 0
+```
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
       {
-        "type": "command",
-        "command": "bun run typecheck"
-      },
-      {
-        "type": "command",
-        "command": "bun run test"
-      },
-      {
-        "type": "command",
-        "command": "echo 'All checks passed, pushing...'"
+        "matcher": "Write|Edit",
+        "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/format.sh\"" }]
       }
     ]
-  }]
+  }
+}
+```
+
+### Whole-project formatter (simple, slower)
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [{ "type": "command", "command": "npm run format >/dev/null 2>&1 || true" }]
+      }
+    ]
+  }
+}
+```
+
+### Feed lint errors back to Claude
+
+A PostToolUse hook that exits 2 can't undo the edit, but its stderr reaches Claude, so Claude fixes the error on its next step:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [{
+          "type": "command",
+          "if": "Edit(*.ts)",
+          "command": "f=$(jq -r '.tool_input.file_path'); npx eslint \"$f\" >&2 || exit 2"
+        }]
+      }
+    ]
+  }
 }
 ```
 
 ---
 
-## Conditional Hook Execution
+## PreToolUse: gates and guards
 
-### Only Run for Specific File Types
+### Block commits unless checks pass
 
 ```json
 {
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "if [[ \"$FILE_PATH\" =~ \\.(ts|tsx)$ ]]; then prettier --write \"$FILE_PATH\"; fi || true"
-    }]
-  }]
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "if": "Bash(git commit *)",
+          "command": "npm run lint >&2 && npm run typecheck >&2 && npm test >&2 || { echo 'Checks failed. Fix them before committing.' >&2; exit 2; }",
+          "timeout": 300,
+          "statusMessage": "Running pre-commit checks..."
+        }]
+      }
+    ]
+  }
 }
 ```
 
-### Skip for Generated Files
+### Block pushes to main
 
 ```json
 {
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "if ! grep -q '@generated' \"$FILE_PATH\" 2>/dev/null; then bun run format -- \"$FILE_PATH\"; fi || true"
-    }]
-  }]
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "if": "Bash(git push *)",
+          "command": "cmd=$(jq -r '.tool_input.command'); case \"$cmd\" in *' main'*|*' master'*|*--force*|*' -f'*) echo 'Direct/force push to main is blocked. Push a branch and open a PR.' >&2; exit 2;; esac"
+        }]
+      }
+    ]
+  }
 }
 ```
 
-### Different Formatters by Extension
+### Protect files from edits (JSON decision form)
+
+```bash
+#!/usr/bin/env bash
+# .claude/hooks/protect.sh: deny edits to lockfiles, .env, and migrations already applied
+f=$(jq -r '.tool_input.file_path // empty')
+case "$f" in
+  *.env|*.env.*|*package-lock.json|*pnpm-lock.yaml|*/migrations/applied/*)
+    jq -n --arg f "$f" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("Protected file: " + $f)}}'
+    ;;
+esac
+exit 0
+```
 
 ```json
 {
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "case \"$FILE_PATH\" in *.py) black \"$FILE_PATH\";; *.ts|*.tsx) prettier --write \"$FILE_PATH\";; *.go) gofmt -w \"$FILE_PATH\";; esac || true"
-    }]
-  }]
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Write|Edit", "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect.sh\"" }] }
+    ]
+  }
+}
+```
+
+`permissionDecision` can be `allow`, `deny`, or `ask`. `updatedInput` can rewrite the tool input before it runs.
+
+### Require tests for changed source files
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "if": "Bash(git commit *)",
+          "command": "missing=$(git diff --cached --name-only --diff-filter=A | grep -E '^src/.*\\.ts$' | grep -v '\\.test\\.' | while read f; do [ -f \"${f%.ts}.test.ts\" ] || echo \"$f\"; done); [ -z \"$missing\" ] || { echo \"Missing tests for: $missing\" >&2; exit 2; }"
+        }]
+      }
+    ]
+  }
 }
 ```
 
 ---
 
-## Blocking vs Non-Blocking Hooks
+## Stop, Notification, and SessionStart hooks
 
-### Blocking Hook (PreToolUse)
-
-Stops Claude if check fails:
+### Desktop notification when Claude needs you
 
 ```json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(git commit*)",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run test"
-    }]
-  }]
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Claude Code\"' 2>/dev/null || notify-send 'Claude Code' 'Claude needs your attention' 2>/dev/null || true"
+        }]
+      }
+    ]
+  }
 }
 ```
 
-### Non-Blocking Hook (PostToolUse)
+### Don't let Claude stop with failing tests
 
-Runs but doesn't stop Claude on failure:
+`Stop` can send Claude back to work. Check `stop_hook_active` to avoid loops:
+
+```bash
+#!/usr/bin/env bash
+# .claude/hooks/stop-gate.sh
+[ "$(jq -r '.stop_hook_active')" = "true" ] && exit 0
+npm test >/dev/null 2>&1 && exit 0
+echo "Tests are failing. Fix them before finishing." >&2
+exit 2
+```
+
+```json
+{ "hooks": { "Stop": [ { "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-gate.sh\"" }] } ] } }
+```
+
+### Log sessions
 
 ```json
 {
-  "PostToolUse": [{
-    "matcher": "Write|Edit",
-    "hooks": [{
-      "type": "command",
-      "command": "bun run format || true"
-    }]
-  }]
+  "hooks": {
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "jq -r '\"\\(.session_id) ended \\(now|todate)\"' >> ~/.claude/session.log" }] }
+    ]
+  }
 }
 ```
 
-### Force Non-Blocking PreToolUse
+### Inject context at startup
 
-When you want to warn but not block:
+stdout from a `SessionStart` hook is added to Claude's context:
 
 ```json
 {
-  "PreToolUse": [{
-    "matcher": "Bash(rm *)",
-    "hooks": [{
-      "type": "command",
-      "command": "(echo '⚠️  Deleting files...' && ls -la $TOOL_INPUT) || true"
-    }]
-  }]
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "startup", "hooks": [{ "type": "command", "command": "echo \"Branch: $(git branch --show-current)\"; git log --oneline -5" }] }
+    ]
+  }
 }
 ```
+
+---
+
+## Complete configs
+
+### TypeScript (pnpm)
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Write|Edit", "hooks": [{ "type": "command", "command": "pnpm format >/dev/null 2>&1 || true" }] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "if": "Bash(git commit *)", "command": "pnpm lint >&2 && pnpm typecheck >&2 && pnpm test >&2 || exit 2", "timeout": 300 }]
+      }
+    ]
+  }
+}
+```
+
+### Python (uv + ruff)
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Write|Edit", "hooks": [{ "type": "command", "if": "Edit(*.py)", "command": "f=$(jq -r '.tool_input.file_path'); ruff format \"$f\" >/dev/null 2>&1; ruff check --fix \"$f\" >/dev/null 2>&1; true" }] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "if": "Bash(git commit *)", "command": "ruff check . >&2 && mypy . >&2 && pytest -q >&2 || exit 2", "timeout": 300 }]
+      }
+    ]
+  }
+}
+```
+
+### Go
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Write|Edit", "hooks": [{ "type": "command", "if": "Edit(*.go)", "command": "gofmt -w \"$(jq -r '.tool_input.file_path')\" 2>/dev/null; true" }] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "if": "Bash(git commit *)", "command": "go vet ./... >&2 && go test ./... >&2 && golangci-lint run >&2 || exit 2", "timeout": 300 }]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Hooks in skills and subagents
+
+Frontmatter hooks use the same shape in YAML. Skill hooks stay active for the rest of the session after the skill runs. Subagent hooks only run while that subagent does, and a subagent's `Stop` becomes `SubagentStop`.
+
+```yaml
+---
+name: safe-migrations
+description: Runs database migrations with a safety check. Use when applying migrations.
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      hooks:
+        - type: command
+          if: "Bash(*migrate*)"
+          command: "bash ${CLAUDE_SKILL_DIR}/scripts/check-backup.sh || exit 2"
+---
+```
+
+---
+
+## Best practices
+
+- **Gates exit 2**, and their stderr explains what to fix. Claude reads it.
+- **PostToolUse hooks work on the edited file only** and stay under ~2 s. Use `>/dev/null 2>&1 || true` for pure formatters.
+- **Narrow with `if`** instead of running on every `Bash` call.
+- **Put logic in scripts** (`.claude/hooks/*.sh`) referenced through `${CLAUDE_PROJECT_DIR}`. JSON strings are painful to quote.
+- **Set a `timeout`** on slow gates, and a `statusMessage` so the user knows what's running.
+- **Hooks run with your credentials.** Review hook changes in PRs like code.
+- Kill switch: `"disableAllHooks": true`.
+
+---
+
+## Debugging
+
+```bash
+jq . .claude/settings.json                    # Valid JSON?
+jq '.hooks | keys' .claude/settings.json      # Events under "hooks"?
+echo '{"tool_name":"Edit","tool_input":{"file_path":"src/a.ts"}}' | bash .claude/hooks/format.sh; echo "exit=$?"
+claude --debug                                # Watch hook execution and stderr
+```
+
+In a session, `/hooks` lists what's registered and where it came from.
+
+---
+
+## Old patterns (don't use)
+
+<details>
+<summary>Legacy snippets that silently fail</summary>
+
+- Events at the settings.json top level (`{"PostToolUse": [...]}`) → nest them under `"hooks"`.
+- `"matcher": "Bash(git commit*)"` → `"matcher": "Bash"` + `"if": "Bash(git commit *)"`.
+- `$FILE_PATH`, `$FILE`, `$CHANGED_FILE`, `$TOOL_INPUT` env vars → read stdin with `jq`.
+- A gate like `npm test` with no `|| exit 2` → exits 1 and doesn't block.
+- `CLAUDE_DEBUG_HOOKS=1` → `claude --debug`.
+
+</details>

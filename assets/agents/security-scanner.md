@@ -1,3 +1,10 @@
+---
+name: security-scanner
+description: Scans the codebase for OWASP-style vulnerabilities, secrets, and risky dependencies and reports findings by severity. Use before merging to main, before deploys, and after adding dependencies.
+tools: Read, Grep, Glob, Bash
+model: inherit
+---
+
 # Security Scanner
 
 Scan codebase for security vulnerabilities before deployment.

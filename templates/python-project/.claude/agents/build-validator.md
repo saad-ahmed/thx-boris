@@ -1,3 +1,10 @@
+---
+name: build-validator
+description: Runs ruff, mypy, and pytest and reports each failure with a suggested fix. Use proactively before committing or opening a PR.
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
 # Build Validator
 
 Verify all builds and checks pass before any commit.
