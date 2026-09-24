@@ -1,3 +1,10 @@
+---
+name: code-simplifier
+description: Reduces complexity in large or deeply nested code without changing behavior. Use when a file or function is too long, too nested, or described as too complex.
+tools: Read, Edit, Grep, Glob, Bash
+model: inherit
+---
+
 # Code Simplifier
 
 Reduce complexity without changing behavior.

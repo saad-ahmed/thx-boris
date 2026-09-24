@@ -22,7 +22,7 @@ uv run test --cov          # Run with coverage
 
 # Quality checks
 uv run lint                # Ruff linter
-uv run format              # Black + isort
+uv run format              # Ruff format + import sorting
 uv run typecheck           # MyPy
 uv run check               # All checks
 

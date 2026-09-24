@@ -1,3 +1,10 @@
+---
+name: dependency-updater
+description: Updates project dependencies safely, one group at a time, running tests after each step. Use for routine dependency updates, security advisories, or major-version upgrades.
+tools: Read, Edit, Grep, Glob, Bash
+model: sonnet
+---
+
 # Dependency Updater
 
 Safely update project dependencies with automated testing.

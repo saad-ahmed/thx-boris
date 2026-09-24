@@ -1,3 +1,10 @@
+---
+name: migration-runner
+description: Runs database migrations with a backup and a tested rollback path. Use when applying schema changes, setting up a new environment, or after pulling new migrations.
+tools: Read, Grep, Glob, Bash
+model: inherit
+---
+
 # Migration Runner
 
 Execute database migrations safely with rollback capability.

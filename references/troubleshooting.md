@@ -1,346 +1,140 @@
 # Troubleshooting
 
-Common issues and solutions when using Claude Code.
+Common Claude Code problems and how to fix them. Start with `/doctor` (in a session) or `claude doctor` (in a terminal).
+
+## Contents
+- Installation and auth
+- Hooks
+- Subagents and skills
+- CLAUDE.md and settings
+- Context and performance
+- MCP
+- Sessions
+- Git mishaps
+- Getting help
 
 ---
 
-## Installation & Setup
+## Installation and auth
 
-### Claude Code not found after install
-
-**Symptom:** `claude: command not found`
-
-**Solutions:**
+**`claude: command not found`**
 ```bash
-# 1. Check if installed globally
-npm list -g @anthropic-ai/claude-code
-
-# 2. Ensure npm global bin is in PATH
-export PATH="$PATH:$(npm config get prefix)/bin"
-
-# 3. Or use npx
-npx @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | bash   # Native installer (recommended)
+claude doctor                                     # Checks install, PATH, and auto-update
 ```
+An old npm global install can shadow the native binary. Run `which -a claude` and remove the stale one.
 
-### API key not working
-
-**Symptom:** "Invalid API key" or "Unauthorized"
-
-**Solutions:**
-```bash
-# 1. Verify key is set
-echo $ANTHROPIC_API_KEY
-
-# 2. Re-authenticate
-claude auth login
-
-# 3. Check key format (should start with sk-ant-)
-```
-
-### Permission denied errors
-
-**Symptom:** Can't create/edit files
-
-**Solutions:**
-```bash
-# 1. Check directory permissions
-ls -la .
-
-# 2. Fix ownership
-sudo chown -R $(whoami) .
-
-# 3. Check if files are read-only
-chmod u+w filename
-```
+**Auth errors / "Invalid API key"**
+- Run `/login` in a session to switch between a claude.ai subscription and Console/API auth.
+- If `ANTHROPIC_API_KEY` is set in your shell, it overrides subscription login. Unset it if that's not what you want.
 
 ---
 
-## Runtime Issues
+## Hooks
 
-### Claude stuck or unresponsive
+**Hooks never run**
+1. `jq '.hooks | keys' .claude/settings.json`: events must sit **under `"hooks"`**, not at the top level.
+2. `/hooks` in a session lists what actually registered.
+3. `matcher` matches **tool names** only (`Bash`, `Write|Edit`). Move argument filters to `"if": "Bash(git commit *)"`.
+4. `claude --debug` shows each hook's execution and stderr.
 
-**Symptom:** No response, spinning forever
+**A gate hook doesn't block**
+It exits 1. Only **exit 2** blocks. End the command with `|| exit 2`.
 
-**Solutions:**
-1. Press `Ctrl+C` to interrupt
-2. Check network connection
-3. Restart: `claude --continue` to resume
-4. Clear cache: `rm -rf ~/.claude/cache`
+**A hook can't find the file path**
+There are no `$FILE_PATH`/`$TOOL_INPUT` env vars. Read stdin: `jq -r '.tool_input.file_path'`.
 
-### High memory usage
-
-**Symptom:** System slowdown, crashes
-
-**Solutions:**
-```bash
-# 1. Limit context size
-claude --max-context 50000
-
-# 2. Work in smaller chunks
-# Split large tasks into subtasks
-
-# 3. Close other Claude sessions
-```
-
-### Hooks not running
-
-**Symptom:** Format/lint hooks don't trigger
-
-**Solutions:**
-```bash
-# 1. Verify settings.json syntax
-cat .claude/settings.json | jq .
-
-# 2. Check hook command works manually
-bun run format
-
-# 3. Enable hook debugging
-CLAUDE_DEBUG_HOOKS=1 claude
-
-# 4. Check matcher pattern
-# "Write|Edit" not "Write | Edit" (no spaces)
-```
-
-### Wrong files being edited
-
-**Symptom:** Claude edits files in wrong directory
-
-**Solutions:**
-1. Verify working directory: `pwd`
-2. Use absolute paths in requests
-3. Create `.claudeignore` to exclude directories
-4. Be specific: "Edit `src/components/Button.tsx`" not "Edit the Button component"
+**Hooks are slow**
+Format only the edited file, add `if` filters, and move long checks to `Stop` or `async: true`.
 
 ---
 
-## Git Issues
+## Subagents and skills
 
-### Uncommitted changes warning
+**Subagent doesn't appear in `/agents`**
+The file must start with `---` frontmatter containing both `name` and `description`. Without them it's skipped silently, and `claude --debug` logs the reason.
 
-**Symptom:** "You have uncommitted changes"
+**Skill never triggers**
+- The description is too vague. Add what it does, "Use when …", and concrete keywords or file types.
+- `paths:` globs may be too narrow.
+- Check `/skills` to confirm it loaded and isn't set to `off`.
+- `/skill-doctor` shows invocation counts and context cost.
+- `/skill-name` always works manually.
 
-**Solutions:**
-```bash
-# 1. Stash changes
-git stash
+**Skill triggers too often**
+Narrow the description and add "Not for …". For side-effect skills, set `disable-model-invocation: true`.
 
-# 2. Or commit them
-git add . && git commit -m "WIP"
+**Skill fails with "Shell command failed for pattern"**
+An `` !`command` `` injection exited non-zero. Append `|| true`, or fix the command.
 
-# 3. Or tell Claude to ignore
-"Continue despite uncommitted changes"
-```
-
-### Merge conflicts after Claude edits
-
-**Symptom:** Git conflicts in files Claude modified
-
-**Solutions:**
-```bash
-# 1. See what changed
-git diff
-
-# 2. Accept Claude's version
-git checkout --theirs filename
-
-# 3. Or accept original
-git checkout --ours filename
-
-# 4. Manual merge
-# Edit file, then: git add filename
-```
-
-### Wrong branch
-
-**Symptom:** Claude committed to wrong branch
-
-**Solutions:**
-```bash
-# 1. Move commit to correct branch
-git branch correct-branch
-git reset --hard HEAD~1
-git checkout correct-branch
-
-# 2. Or cherry-pick
-git checkout correct-branch
-git cherry-pick <commit-sha>
-```
+**Upload to claude.ai / API fails**
+Frontmatter contains Claude Code-only fields. Keep only `name`, `description`, `license`, `compatibility`, `metadata`, and `allowed-tools`.
 
 ---
 
-## Tool-Specific Issues
+## CLAUDE.md and settings
 
-### Bash commands fail
+**Claude ignores CLAUDE.md**
+- It must be named `CLAUDE.md` exactly, at the project root (or `.claude/CLAUDE.md`). Run `/memory` to see which files loaded.
+- It's too long or too vague. Trim it to imperative bullets and move details to linked files or `.claude/rules/`.
+- Contradictory instructions: remove the stale one.
 
-**Symptom:** "Command not found" or permission errors
-
-**Solutions:**
-```bash
-# 1. Check if command exists
-which <command>
-
-# 2. Use full path
-/usr/local/bin/node instead of node
-
-# 3. Check shell
-echo $SHELL
-# Claude uses sh, not bash features
-
-# 4. Pre-allow command
-/permissions allow Bash(<command>)
-```
-
-### Read tool returns empty
-
-**Symptom:** File appears empty when read
-
-**Solutions:**
-1. Check file exists: `ls -la <file>`
-2. Check file permissions
-3. Check if binary file (Claude can't read binaries)
-4. Try smaller file (very large files may truncate)
-
-### Write tool fails
-
-**Symptom:** Can't create or modify file
-
-**Solutions:**
-1. Check parent directory exists
-2. Check write permissions
-3. Check disk space: `df -h`
-4. Check if file is locked by another process
+**Settings don't apply**
+- Validate with `jq . .claude/settings.json`.
+- Precedence is managed > CLI args > `.claude/settings.local.json` > `.claude/settings.json` > `~/.claude/settings.json`.
+- `/config` and `/permissions` show the effective values.
 
 ---
 
-## Performance Issues
+## Context and performance
 
-### Slow responses
+**Responses degrade in long sessions**
+`/clear` between unrelated tasks, `/compact` to summarize, and `/context` to see what's using space.
 
-**Symptom:** Claude takes too long to respond
+**Claude reads irrelevant or sensitive files**
+Add `permissions.deny` rules such as `Read(./dist/**)` or `Read(./.env)`. There is no `.claudeignore`, and `.gitignore`d files are already excluded from file search.
 
-**Causes & Solutions:**
-| Cause | Solution |
-|-------|----------|
-| Large context | Break into smaller tasks |
-| Complex codebase | Use `.claudeignore` |
-| Network latency | Check internet connection |
-| Slow hooks | Optimize hook commands |
-| Large files | Read specific line ranges |
-
-### Token limit exceeded
-
-**Symptom:** "Context window exceeded"
-
-**Solutions:**
-1. Start new session: `claude`
-2. Be more specific in requests
-3. Add files to `.claudeignore`
-4. Use `--max-context` flag
+**Slow overall**
+Delegate broad searches to subagents (`Explore`), keep MCP servers to the ones you need, and lower `/effort` for simple tasks.
 
 ---
 
-## Configuration Issues
+## MCP
 
-### CLAUDE.md not being read
-
-**Symptom:** Claude ignores project instructions
-
-**Solutions:**
-1. Check file location (must be project root)
-2. Check filename: `CLAUDE.md` (case-sensitive)
-3. Check file encoding (UTF-8)
-4. Verify content is valid markdown
-
-### Settings not applying
-
-**Symptom:** `.claude/settings.json` ignored
-
-**Solutions:**
-```bash
-# 1. Validate JSON
-cat .claude/settings.json | jq .
-
-# 2. Check location
-# Should be: .claude/settings.json (not .claude.json)
-
-# 3. Check permissions
-ls -la .claude/
-
-# 4. Restart Claude
-```
-
-### MCP servers not connecting
-
-**Symptom:** MCP tools unavailable
-
-**Solutions:**
-```bash
-# 1. Check .mcp.json syntax
-cat .mcp.json | jq .
-
-# 2. Verify server is running
-curl <mcp-server-url>/health
-
-# 3. Check network/firewall
-
-# 4. Restart with verbose logging
-CLAUDE_DEBUG_MCP=1 claude
-```
+**MCP tools missing**
+1. `/mcp` shows status and handles auth.
+2. `claude mcp list` checks configured servers.
+3. `jq . .mcp.json`: the top-level key must be `mcpServers`.
+4. `claude --debug=mcp` logs startup errors.
 
 ---
 
-## Session Issues
+## Sessions
 
-### Can't resume session
+**Can't find an old session**
+`claude -r` opens a picker. Name sessions with `/rename` so you can run `claude -r <name>` later.
 
-**Symptom:** `--continue` shows wrong session
-
-**Solutions:**
-```bash
-# 1. List sessions
-claude sessions list
-
-# 2. Resume specific session
-claude --resume <session-id>
-
-# 3. Clear old sessions
-claude sessions clear
-```
-
-### Session data lost
-
-**Symptom:** Context disappeared mid-conversation
-
-**Solutions:**
-1. Check `~/.claude/sessions/` for backups
-2. Use `--continue` to resume
-3. Re-provide important context
+**Context vanished mid-task**
+Auto-compaction summarized it. Re-state the key constraints, or put durable ones in CLAUDE.md.
 
 ---
 
-## Getting Help
+## Git mishaps
 
-If issues persist:
-
-1. **Check logs:** `~/.claude/logs/`
-2. **Verbose mode:** `CLAUDE_DEBUG=1 claude`
-3. **GitHub Issues:** https://github.com/anthropics/claude-code/issues
-4. **Documentation:** https://docs.anthropic.com/claude-code
-
-### Useful Debug Commands
-
+**Claude committed to the wrong branch**
 ```bash
-# Claude version
-claude --version
-
-# System info
-uname -a
-node --version
-npm --version
-
-# Claude config
-cat ~/.claude/config.json
-
-# Recent logs
-tail -100 ~/.claude/logs/latest.log
+git branch correct-branch          # Keep the commit on a new branch
+git reset --keep HEAD~1            # Remove it from the current branch
+git switch correct-branch
 ```
+
+**Undo Claude's edits**
+Use `/rewind` (or press `Esc` twice) to restore code and conversation to an earlier checkpoint. For edits made by background subagents, use `git restore <file>`.
+
+---
+
+## Getting help
+
+- `/doctor` for diagnostics
+- Docs: https://code.claude.com/docs
+- Issues: https://github.com/anthropics/claude-code/issues

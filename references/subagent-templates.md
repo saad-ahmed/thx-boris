@@ -1,12 +1,30 @@
 # Subagent Templates
 
-Complete templates for common subagents. Copy to `.claude/agents/[name].md`.
+Complete templates for common subagents. Copy one to `.claude/agents/<name>.md` (or `~/.claude/agents/`).
+
+Every file **must** start with YAML frontmatter that has `name` and `description`, or Claude Code silently skips it. Optional fields: `tools` (allowlist), `disallowedTools`, `model` (`sonnet`, `opus`, `haiku`, `inherit`), `effort`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `isolation: worktree`, and `color`. Keep `tools` minimal: reviewers and validators rarely need `Edit` or `Write`.
+
+## Contents
+- build-validator
+- code-architect
+- code-simplifier
+- oncall-guide
+- verify-app
+- pr-reviewer
+- test-writer
 
 ---
 
 ## build-validator.md
 
 ```markdown
+---
+name: build-validator
+description: Verifies typecheck, lint, and tests pass before a commit. Use proactively before committing or opening a PR.
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
 # Build Validator
 
 **Purpose:** Verify all builds and checks pass before any commit.
@@ -38,6 +56,13 @@ OR
 ## code-architect.md
 
 ```markdown
+---
+name: code-architect
+description: Evaluates architectural options and trade-offs and records a decision. Use for design questions, new modules, or cross-cutting changes.
+tools: Read, Grep, Glob
+model: opus
+---
+
 # Code Architect
 
 **Purpose:** Make high-level design decisions and evaluate architectural tradeoffs.
@@ -82,6 +107,13 @@ OR
 ## code-simplifier.md
 
 ```markdown
+---
+name: code-simplifier
+description: Reduces complexity without changing behavior. Use when code is long, deeply nested, or hard to follow.
+tools: Read, Edit, Grep, Glob, Bash
+model: inherit
+---
+
 # Code Simplifier
 
 **Purpose:** Reduce complexity and improve readability without changing behavior.
@@ -129,6 +161,13 @@ OR
 ## oncall-guide.md
 
 ```markdown
+---
+name: oncall-guide
+description: Triages production incidents, finds root cause, and proposes a fix and prevention. Use when an alert fires or production is broken.
+tools: Read, Grep, Glob, Bash
+model: opus
+---
+
 # Oncall Guide
 
 **Purpose:** Rapid diagnosis and resolution of production incidents.
@@ -189,6 +228,13 @@ If unresolved in 15 min, escalate to [team/person]
 ## verify-app.md
 
 ```markdown
+---
+name: verify-app
+description: Verifies build, runtime, and integrations end to end. Use before merging to main or deploying.
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
 # Verify App
 
 **Purpose:** End-to-end application verification before deployment.
@@ -246,6 +292,13 @@ All verification steps pass with no errors.
 ## pr-reviewer.md
 
 ```markdown
+---
+name: pr-reviewer
+description: Reviews a PR or diff for bugs, security, and convention violations and separates blocking from non-blocking findings. Use when asked to review a PR or changes.
+tools: Read, Grep, Glob, Bash
+model: opus
+---
+
 # PR Reviewer
 
 **Purpose:** Thorough code review with consistent quality bar.
@@ -298,6 +351,13 @@ All verification steps pass with no errors.
 ## test-writer.md
 
 ```markdown
+---
+name: test-writer
+description: Writes tests that follow project conventions for new or untested code. Use when adding features or when coverage is missing.
+tools: Read, Edit, Write, Grep, Glob, Bash
+model: sonnet
+---
+
 # Test Writer
 
 **Purpose:** Generate comprehensive tests for existing code.
